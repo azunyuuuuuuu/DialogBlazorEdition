@@ -1,0 +1,80 @@
+@inherits ComponentBase
+@implements IAsyncDisposable
+
+@inject IJSRuntime _js
+
+<dialog @ref="@dialogElement" @attributes="@CapturedAttributes">
+    @if (IsDialogVisible)
+    {
+        @ChildContent
+    }
+</dialog>
+
+@code {
+    private ElementReference dialogElement;
+    private readonly Lazy<Task<IJSObjectReference>> moduleTask;
+    private DotNetObjectReference<Dialog> dotNetObjectReference;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? CapturedAttributes { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> DialogClosed { get; set; }
+
+    public bool IsDialogVisible { get; private set; } = false;
+
+    public Dialog()
+    {
+        moduleTask = new(() => _js!.InvokeAsync<IJSObjectReference>(
+        identifier: "import",
+        args: "./Components/Dialog.razor.js")
+        .AsTask());
+
+        dotNetObjectReference = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var module = await moduleTask.Value;
+            await module.InvokeVoidAsync(identifier: "addCloseEventListener", dialogElement, dotNetObjectReference);
+        }
+    }
+
+    public async ValueTask ShowDialogAsync()
+    {
+        var module = await moduleTask.Value;
+
+        await module.InvokeVoidAsync(identifier: "showDialog", dialogElement);
+
+        this.IsDialogVisible = true;
+    }
+
+    public async ValueTask CloseDialogAsync()
+    {
+        var module = await moduleTask.Value;
+        await module.InvokeVoidAsync(identifier: "closeDialog", dialogElement);
+        this.IsDialogVisible = false;
+    }
+
+    [JSInvokable]
+    public void OnDialogClosed()
+    {
+        IsDialogVisible = false;
+        DialogClosed.InvokeAsync(IsDialogVisible);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (moduleTask.IsValueCreated)
+        {
+            var module = await moduleTask.Value;
+            await module.DisposeAsync();
+        }
+    }
+}
