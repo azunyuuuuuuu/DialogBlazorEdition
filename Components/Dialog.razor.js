@@ -4,11 +4,9 @@
 // ------------------------------------------------------------
 
 export function addCloseEventListener(dialog, dotNetHelper) {
-
     dialog.addEventListener('close', () => {
         dotNetHelper.invokeMethodAsync('OnDialogClosed');
     });
-
 }
 
 export function showDialog(dialog) {
